@@ -1,6 +1,8 @@
 metadata/
-input/
 Other/
+
+input/LIBRARIES_KEY.txt
+input/tpm_counts.txt
 
 code/.Rhistory
 .DS_Store
