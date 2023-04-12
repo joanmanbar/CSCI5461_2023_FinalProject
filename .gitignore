@@ -1,10 +1,6 @@
 metadata/
-output/
+input/
 Other/
-
-
-input/complete_samples.txt
-input/tpm_counts.txt
 
 code/.Rhistory
 .DS_Store

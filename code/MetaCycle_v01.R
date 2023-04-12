@@ -22,6 +22,8 @@ library(MetaCycle)
 # Files ----
 # *****************************************************
 
+## Match  ----
+# Match sample id with library id
 TPM_counts <- read.delim('../input/tpm_counts.txt') # counts
 TPM <- TPM_counts # Copy original data
 rownames(TPM) <- TPM$Geneid  # Genes as index
@@ -34,12 +36,17 @@ colnames(Key) <- Key_headers
 # Match library names with actual sample id
 match_index <- match(names(TPM), Key$libraryName)
 colnames(TPM) <- Key$sampleName[match_index]
-# We only need WTP1 to WTP6
+
+## Subset ----
+# Keep WTP1 to WTP7 for seven specific genotypes
 cols_to_keep <- grep("WTP", colnames(TPM)) # Select only WTP
 TPM <- TPM[, cols_to_keep] # Subset
-# ********** WHAT IS T1?? ********************
-cols_to_remove <- grepl("WTP7|WTP8|_T1", names(TPM)) # Remove WTP7 and WTP8 
+cols_to_keep <- grepl("L58|WO83|A03|VT123|Pcglu|O302V|R500", names(TPM)) # Keep 7 genoypes
+TPM <- TPM[, cols_to_keep] # Subset
+cols_to_remove <- grepl("WTP8|_T1", names(TPM)) # Remove WTP8 and _T1 
 TPM <- TPM[, !cols_to_remove] # subset
+
+## Design ----
 # Get info from sample ID
 IDs <- data.frame(names(TPM))
 names(IDs) <- "ID"
@@ -47,13 +54,7 @@ split_ID <- separate(IDs, col = ID,
                        into = c("Genotype", "WTP", "Rep"), sep = "_")
 IDs <- cbind(IDs, split_ID)
 
-
-
-
-# *****************************************************
-# Missing samples ----
-# *****************************************************
-
+## Missing samples ----
 genotypes <- sort(unique(IDs$Genotype)) # Unique genotypes
 time_points <- sort(unique(IDs$WTP)) # Unique time points
 reps <- sort(unique(IDs$Rep)) # Unique reps
@@ -87,36 +88,137 @@ complete_samples <- complete_samples[all_samples] # order the columns
 
 
 # *****************************************************
-# MetaCycle Analysis----
+# MetaCycle ----
 # *****************************************************
 # Source: https://cran.r-project.org/web/packages/MetaCycle/MetaCycle.pdf
+# Analysis need to be done per genotype
 
-# Subset a genotype
-AO3 <- complete_samples[,1:24]
-AO3$GeneID <- rownames(AO3) # Add rownames as gene Id
-AO3 <- AO3[,c(25,1:24)] # bring ID to front
+## All Genotypes ----
 
-# write file into a 'txt' file
-write.table(AO3, file="../input/complete_samples.txt",
-            sep="\t", quote=FALSE, row.names=FALSE)
+### Prep ----
+# Timepoints
+time_points <- c(17,21,25,29,33,37,41)
+time_points <- unlist(c(lapply(time_points, rep, times = n_reps))) # tps by reps
+# Genotype
+genotypes <- sort(unique(IDs$Genotype)) # Unique
 
-# analyze data with JTK_CYCLE and Lomb-Scargle
-meta2d(infile="../input/complete_samples.txt", filestyle="txt", 
-       outdir="../output", timepoints=rep(seq(0, 30, by=6), each=4),
-       cycMethod=c("JTK","LS"), outIntegration="noIntegration")
+### Analysis ----
+# Approx 8.5min per genotype (Joan's Mac)
+for (g in 1:length(genotypes)) {
+  # Copy dataframe
+  df <- complete_samples
+  geno_to_keep <- grep(genotypes[g], colnames(df)) # Select specific genotype
+  df <- df[, geno_to_keep] # Subset
+  df$GeneID <- rownames(df) # Add rownames as gene Id
+  df <- df[,c(length(df),1:length(df)-1)] # bring ID to front
+  
+  # write file into a 'txt' file for this genotype
+  df_filename <- sprintf("%s", genotypes[g])
+  df_filename <- paste0("../input/MetaCycle/",df_filename)
+  if(!file.exists(df_filename)){dir.create(df_filename, recursive = TRUE)} # Veryfy directory exists
+  df_filename <- paste0(df_filename,"/input.txt")
+  # set utput directory for this genotype
+  df_outdir <- sprintf("%s", genotypes[g])
+  df_outdir <- paste0("../output/MetaCycle/",df_outdir)
+  if(!file.exists(df_outdir)){dir.create(df_outdir, recursive = TRUE)} # Veryfy directory exists
+  # Write current genotype's input
+  write.table(df, file=df_filename,
+              sep="\t", quote=FALSE, row.names=FALSE)
+  
+  # analyze data with JTK_CYCLE and Lomb-Scargle
+  meta2d(infile=df_filename, filestyle="txt", 
+         outdir=df_outdir, timepoints=time_points,
+         cycMethod=c("JTK","LS"), outIntegration="noIntegration")
+  
+  print(sprintf("Finished analysis for %s", genotypes[g]))
+  
+}
 
-# Files should be saved in "output" directory
 
 
 
 
 
-# *****************************************************
-# Ignore this----
-# *****************************************************
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ***** ----
+# ***** ----
+# Ignore   ----
+# anything----
+# below ----
+# ***** ----
+# ***** ----
+
+
+
+
+
+
+
+# ## Single Genotype ----
+
+# ### Prep ----
+# Timepoints
+# time_points <- c(17,21,25,29,33,37,41)
+# time_points <- unlist(c(lapply(time_points, rep, times = n_reps))) # tps by reps
+# # Copy df
+# df <- complete_samples
+# # Subset genotype
+# genotypes <- sort(unique(IDs$Genotype)) # Unique genotypes
+# g = 1  # specific genotype
+# geno_to_keep <- grep(genotypes[g], colnames(df)) # Select specific genotype
+# df <- df[, geno_to_keep] # Subset
+# df$GeneID <- rownames(df) # Add rownames as gene Id
+# df <- df[,c(length(df),1:length(df)-1)] # bring ID to front
+# 
+# ### Analysis ----
+# # write file into a 'txt' file for this genotype
+# df_filename <- sprintf("%s", genotypes[g])
+# df_filename <- paste0("../input/MetaCycle/",df_filename)
+# if(!file.exists(df_filename)){dir.create(df_filename, recursive = TRUE)} # Veryfy directory exists
+# df_filename <- paste0(df_filename,"/input.txt")
+# # set utput directory for this genotype
+# df_outdir <- sprintf("%s", genotypes[g])
+# df_outdir <- paste0("../output/MetaCycle/",df_outdir)
+# if(!file.exists(df_outdir)){dir.create(df_outdir, recursive = TRUE)} # Veryfy directory exists
+# # Write current genotype's input
+# write.table(df, file=df_filename,
+#             sep="\t", quote=FALSE, row.names=FALSE)
+# 
+# # analyze data with JTK_CYCLE and Lomb-Scargle
+# meta2d(infile=df_filename, filestyle="txt", 
+#        outdir=df_outdir, timepoints=time_points,
+#        cycMethod=c("JTK","LS"), outIntegration="noIntegration")
+# 
+# # Files should be saved in "output" directory
+
+
+
+
+
+
 
 # This is how example data from MetaCycle look like
-df <- cycMouseLiverProtein
-df <- cycHumanBloodData
-df2 <- cycHumanBloodDesign
-df <- cycYeastCycle
+# df <- cycMouseLiverProtein
+# df <- cycHumanBloodData
+# df2 <- cycHumanBloodDesign
+# df <- cycYeastCycle
