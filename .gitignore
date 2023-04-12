@@ -2,6 +2,7 @@ metadata/
 output/
 Other/
 input/tpm_counts.txt
+input/complete_samples.txt
 
 code/.Rhistory
 .DS_Store
