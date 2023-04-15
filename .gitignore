@@ -3,6 +3,8 @@ Other/
 
 input/LIBRARIES_KEY.txt
 input/tpm_counts.txt
+input/Genomes/
 
 code/.Rhistory
+code/.ipynb_checkpoints/
 .DS_Store
