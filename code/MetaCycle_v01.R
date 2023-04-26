@@ -11,6 +11,8 @@ setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 # *****************************************************
 
 library(tidyr)
+library(reshape2)
+library(dplyr)
 # install.packages("devtools")  # install 'devtools' in R(>3.0.2)
 # devtools::install_github('gangwug/MetaCycle') # install MetaCycle
 library(MetaCycle)
@@ -102,6 +104,7 @@ time_points <- unlist(c(lapply(time_points, rep, times = n_reps))) # tps by reps
 # Genotype
 genotypes <- sort(unique(IDs$Genotype)) # Unique
 
+
 ### Analysis ----
 # Approx 8.5min per genotype (Joan's Mac)
 for (g in 1:length(genotypes)) {
@@ -128,7 +131,7 @@ for (g in 1:length(genotypes)) {
   # analyze data with JTK_CYCLE and Lomb-Scargle
   meta2d(infile=df_filename, filestyle="txt", 
          outdir=df_outdir, timepoints=time_points,
-         cycMethod=c("JTK","LS"), outIntegration="noIntegration")
+         cycMethod=c("JTK"))
   
   print(sprintf("Finished analysis for %s", genotypes[g]))
   
@@ -138,10 +141,97 @@ for (g in 1:length(genotypes)) {
 
 
 
+# Circadian Genes ----
+
+## Match genes ----
+# List synthenic files
+Synthenic <- list.files(path = '../input/JGI_syntenicHits', 
+                        pattern = '.synHits', 
+                        recursive = TRUE, 
+                        full.names = TRUE)
+# Emtpy df for matching names
+MatchGeneName <- data.frame()
+
+for (s in Synthenic) {
+  s_file <- read.delim(s) # counts
+  s_file <- s_file[, c('id1','id2')]
+  colnames(s_file) <- c('CycID','NewCycID')
+  colnames(s_file)[colnames(s_file) == 'id1'] <- 'CycID'
+  MatchGeneName <- rbind(MatchGeneName, s_file)
+}
+
+# Add genotype as column
+MatchGeneName <- separate(MatchGeneName, NewCycID, into = c("Genotype", "Gene"), sep = "\\.") 
+# Recover NewCycID
+MatchGeneName$NewCycID <- paste0(MatchGeneName$Genotype,".",MatchGeneName$Gene)
+# Remove the first two characters (Br) in genotype
+MatchGeneName$Genotype <- substr(MatchGeneName$Genotype, 
+                                 3, 
+                                 nchar(MatchGeneName$Genotype))
+# Avoid using the function below in case other genotypes contain "Br"
+# MatchGeneName$Gene <- gsub('Br','',MatchGeneName$Genotype)
 
 
+# List files from Metacycle (MC)
+MC_files <- list.files(path = '../output/MetaCycle', 
+                         pattern = 'meta2d_input.txt', 
+                         recursive = TRUE, 
+                         full.names = TRUE)
+
+# Create empty list for neew dfs
+AllGenotypes <- list()
+
+# Loop through paths
+for (f in MC_files) {
+  # current genotype
+  file_path <- f # path
+  GenotypeName <- strsplit(file_path, "/")[[1]]
+  GenotypeName <- GenotypeName[length(GenotypeName)-1]
+  # Rename WO83, O302V, and Pcglu to match
+  GenotypeName <- ifelse(GenotypeName=="WO83","WO_83", 
+                         ifelse(GenotypeName=="O302V","O_302V", 
+                                ifelse(GenotypeName=="Pcglu","PCGlu",
+                                       GenotypeName)))
+  
+  # Read and filter file
+  GenotypeFile <- read.delim(file_path) # counts
+  GenotypeFile$CycID <- gsub(pattern = ".v2.1", "", GenotypeFile$CycID)
+  GenotypeFile <- GenotypeFile[GenotypeFile$JTK_BH.Q < 0.001, ] # keep those with FDR < 0.001
+  
+  # We don't need to match R500 since it already has the proper gene names
+  if (GenotypeName!="R500") {
+    MGN_subset <- MatchGeneName[which(
+      MatchGeneName$Genotype ==GenotypeName ), ]
+    MGN_subset <- MGN_subset[,c("CycID","NewCycID")]
+    # Match gene names
+    GenotypeFile <- merge(GenotypeFile,MGN_subset)
+    AllGenotypes[[GenotypeName]] <- GenotypeFile  # append
+    
+    # Only for R500
+    } else{ 
+      # Add NewCycID column to match the other dfs
+      GenotypeFile$NewCycID <- GenotypeFile$CycID 
+      AllGenotypes[[GenotypeName]] <- GenotypeFile # append
+      
+    }
+    
+}
 
 
+# Current path
+Combined_dfs <- bind_rows(AllGenotypes, .id = "Genotype")
+table(Combined_dfs$Genotype)
+
+# ************************************
+#     WE HAVE DUPLICATES IN A03 
+#         (and maybe others)
+#             ASK ANGIE!!!
+# ***********************************
+
+
+# Remove duplicated??????  and save file
+CircadianGenes <- Combined_dfs[!duplicated(Combined_dfs$NewCycID), ]
+write.csv(CircadianGenes, "../output/MetaCycle/CircadianGenes.csv",row.names = F)
 
 
 
@@ -167,6 +257,67 @@ for (g in 1:length(genotypes)) {
 # below ----
 # ***** ----
 # ***** ----
+
+
+
+
+
+
+
+## Plot ----
+# 
+# # select columns that contain the substring
+# WTP1 <- names(df)[grepl(substr_to_find[1], names(df))]
+# WTP2 <- names(df)[grepl(substr_to_find[2], names(df))]
+# WTP3 <- names(df)[grepl(substr_to_find[3], names(df))]
+# WTP4 <- names(df)[grepl(substr_to_find[4], names(df))]
+# WTP5 <- names(df)[grepl(substr_to_find[5], names(df))]
+# WTP6 <- names(df)[grepl(substr_to_find[6], names(df))]
+# WTP7 <- names(df)[grepl(substr_to_find[7], names(df))]
+# 
+# df2 <- df
+# df2$WTP1 <- rowMeans(df[, WTP1], na.rm = TRUE)
+# df2$WTP2 <- rowMeans(df[, WTP2], na.rm = TRUE)
+# df2$WTP3 <- rowMeans(df[, WTP3], na.rm = TRUE)
+# df2$WTP4 <- rowMeans(df[, WTP4], na.rm = TRUE)
+# df2$WTP5 <- rowMeans(df[, WTP5], na.rm = TRUE)
+# df2$WTP6 <- rowMeans(df[, WTP6], na.rm = TRUE)
+# df2$WTP7 <- rowMeans(df[, WTP7], na.rm = TRUE)
+# 
+# df3 <- df2[,substr_to_find]
+# df3$ID <- rownames(df3)
+# 
+# somegenes <-  c(34829,34923,35159,35240,35255)
+# 
+# df3 <- df3[somegenes,]
+# CirGene <- df3
+# CirGene = melt(CirGene, id.vars = "ID")
+# 
+# ggplot(CirGene, aes(x = variable, y = value)) + geom_line(aes(color = ID, group = ID))
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# df3 <- df3[,]
+# 
+# Top10_A03 <- A03[order(A03$JTK_BH.Q),1]
+# Top10_A03 <- Top10_A03[1:5]
+# 
+# 
+# CirGene <- df3[Top10_A03,]
+# CirGene$ID <- rownames(CirGene)
+# CirGene = melt(CirGene, id.vars = "ID")
+# 
+# ggplot(CirGene, aes(x = variable, y = value)) + geom_line(aes(color = ID, group = ID))
+# 
+
+
+
+
+
 
 
 

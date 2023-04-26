@@ -1,5 +1,7 @@
 metadata/
 Other/
+input/
+output/
 
 input/LIBRARIES_KEY.txt
 input/tpm_counts.txt
